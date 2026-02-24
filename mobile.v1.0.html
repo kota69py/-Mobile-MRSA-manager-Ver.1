@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SMC_Toyoshi MRSA Manager Pro (Mobile)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap');
+        :root { --app-indigo: #4f46e5; }
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        
+        /* 隠しスクロールバー（タブメニュー等で使用） */
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.3s ease-out; }
+        .tab-trigger { flex-shrink: 0; white-space: nowrap; }
+        .tab-trigger.active { background-color: white; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); color: var(--app-indigo); border: 2px solid #e2e8f0; }
+        
+        /* Input Styles (スマホ向け最適化) */
+        .tdm-input { width: 100%; background: #ffffff; text-align: center; font-weight: bold; padding: 10px 8px; outline: none; transition: background 0.2s; font-size: 15px; border-radius: 8px; border: 1px solid #e2e8f0; }
+        .tdm-input:focus { background: #eef2ff; border-color: var(--app-indigo); box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2); }
+        .tdm-date { width: 100%; font-size: 14px; font-weight: bold; background: #ffffff; border: 1px solid #e2e8f0; padding: 8px; border-radius: 8px; }
+        
+        .modal-overlay { animation: fadeIn 0.2s ease-out; }
+        .modal-content { animation: popIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
+        @keyframes popIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* === 印刷専用レイアウト === */
+        @media print {
+            @page { size: A4; margin: 8mm; }
+            body { background: white !important; font-size: 9pt; zoom: 0.75; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .no-print, header, aside, .tab-nav-container, .modal-overlay { display: none !important; }
+            
+            #print-header { display: grid !important; grid-template-columns: repeat(6, 1fr); gap: 10px; background: #f8fafc; border: 2px solid #cbd5e1; padding: 10px; margin-bottom: 20px; border-radius: 8px; }
+            #print-header label { font-size: 7pt; color: #64748b; font-weight: bold; text-transform: uppercase; }
+            #print-header span { font-size: 10pt; color: #0f172a; font-weight: 900; }
+
+            .main-layout { display: block !important; }
+            main { width: 100% !important; }
+            .tab-content { display: none !important; }
+            .tab-content.active { display: block !important; }
+            
+            .graph-section { height: 250px !important; border: 1px solid #e2e8f0 !important; page-break-inside: avoid; }
+            .graph-container { height: 200px !important; }
+            canvas { max-height: 200px !important; }
+            
+            .print-break { break-inside: avoid; margin-bottom: 15px; }
+        }
+        #print-header { display: none; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen p-3 md:p-6 text-base pb-20">
+
+    <!-- 印刷用ヘッダー -->
+    <div id="print-header">
+        <div class="col-span-2">
+            <label>ID / Name</label>
+            <span id="p-id-name">--</span>
+        </div>
+        <div>
+            <label>Age / Sex</label>
+            <span id="p-age-sex">--</span>
+        </div>
+        <div>
+            <label>Weight</label>
+            <span id="p-weight">--</span>
+        </div>
+        <div>
+            <label>Cre / eGFR</label>
+            <span id="p-renal">--</span>
+        </div>
+        <div>
+            <label>CCr</label>
+            <span id="p-ccr">--</span>
+        </div>
+    </div>
+
+    <div class="max-w-xl mx-auto space-y-4 main-layout">
+        
+        <!-- アプリヘッダー -->
+        <header class="flex flex-col gap-4 border-b-2 pb-4 border-slate-200 no-print">
+            <div class="flex items-center gap-3">
+                <div class="p-2.5 bg-indigo-600 rounded-xl shadow-indigo-200 shadow-lg text-white">
+                    <i data-lucide="stethoscope" class="w-7 h-7"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tighter text-slate-800 leading-none">MRSA Manager <span class="text-indigo-600">Pro</span></h1>
+                    <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Mobile Edition v13.1</p>
+                </div>
+            </div>
+            
+            <!-- 主要な腎機能のハイライト -->
+            <div class="flex items-center justify-around bg-white py-3 rounded-2xl border border-slate-200 shadow-sm">
+                <div class="text-center">
+                    <span class="text-[10px] block text-slate-500 font-bold uppercase">eGFR</span>
+                    <span id="res-egfr" class="text-xl font-black text-indigo-600">--</span>
+                </div>
+                <div class="w-px bg-slate-200 h-8"></div>
+                <div class="text-center">
+                    <span class="text-[10px] block text-slate-500 font-bold uppercase">CCr</span>
+                    <span id="res-ccr" class="text-xl font-black text-indigo-600">--</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 患者情報入力（スマホ向けに整理） -->
+        <aside class="space-y-4">
+            <div class="bg-white shadow-md rounded-2xl overflow-hidden border border-slate-200">
+                <div class="h-2 bg-indigo-600"></div>
+                <div class="p-4 space-y-4">
+                    <div class="text-xs font-bold flex items-center gap-1.5 uppercase text-slate-500 tracking-wider">
+                        <i data-lucide="user" class="w-4 h-4"></i> 患者基本情報
+                    </div>
+                    <div class="space-y-3">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-indigo-600 uppercase">患者ID / 記録名</label>
+                            <input type="text" id="recordName" placeholder="IDなど" class="w-full p-2.5 border border-indigo-100 bg-indigo-50/50 rounded-lg text-sm font-bold focus:border-indigo-500 outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">性別</label>
+                                <select id="sex" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold bg-white"><option value="male">男性</option><option value="female">女性</option></select>
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">年齢</label>
+                                <input type="number" id="age" value="65" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">体重 (kg)</label>
+                                <input type="number" id="weight" value="60" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold">
+                            </div>
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Cre (mg/dL)</label>
+                                <input type="number" step="0.01" id="creatinine" value="1.0" class="w-full p-2.5 border border-slate-200 rounded-lg text-sm font-bold">
+                            </div>
+                        </div>
+                        
+                        <!-- 透析・CART設定 -->
+                        <div class="flex flex-col gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200 mt-2">
+                            <label class="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                                <i data-lucide="droplets" class="w-3 h-3"></i> 透析・特殊設定
+                            </label>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="isCART" class="w-5 h-5 accent-indigo-600 rounded" onchange="toggleDialysis('cart')">
+                                <label for="isCART" class="text-xs font-bold text-slate-700 cursor-pointer flex-1">CART (CCr=50評価)</label>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <input type="checkbox" id="isHD" class="w-5 h-5 accent-indigo-600 rounded" onchange="toggleDialysis('hd')">
+                                <label for="isHD" class="text-xs font-bold text-slate-700 cursor-pointer flex-1">血液透析 (CCr=5評価)</label>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 pt-2">
+                            <div class="space-y-1">
+                                <label class="text-[10px] font-bold text-indigo-600 uppercase">VCM目標AUC</label>
+                                <select id="targetAuc" class="w-full p-2.5 border border-indigo-100 rounded-lg text-sm font-bold text-indigo-700 bg-white">
+                                    <option value="400">400 (下限)</option>
+                                    <option value="500" selected>500 (推奨)</option>
+                                    <option value="600">600 (上限)</option>
+                                </select>
+                            </div>
+                            <div class="space-y-1 flex flex-col justify-end pb-1">
+                                <div class="flex items-center gap-2 bg-red-50 p-2.5 rounded-lg border border-red-100">
+                                    <input type="checkbox" id="isSevere" class="w-4 h-4 accent-red-600">
+                                    <label for="isSevere" class="text-xs font-bold text-red-700">重症 (DAP増)</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="w-full">
+            <!-- 横スクロール可能なタブナビゲーション -->
+            <div class="w-full no-print tab-nav-container sticky top-0 z-20 bg-slate-50 pt-2 pb-3">
+                <div class="flex overflow-x-auto gap-2 bg-slate-200/60 p-1.5 rounded-2xl border border-slate-200 hide-scrollbar snap-x">
+                    <button onclick="switchTab('overview')" id="tab-btn-overview" class="tab-trigger active px-4 py-2.5 rounded-xl transition-all snap-start"><span class="text-sm font-bold">比較・設計</span></button>
+                    <button onclick="switchTab('tdm-vcm')" id="tab-btn-tdm-vcm" class="tab-trigger px-4 py-2.5 rounded-xl transition-all snap-start"><span class="text-sm font-bold">VCM TDM</span></button>
+                    <button onclick="switchTab('tdm-teic')" id="tab-btn-tdm-teic" class="tab-trigger px-4 py-2.5 rounded-xl transition-all snap-start"><span class="text-sm font-bold">TEIC TDM</span></button>
+                    <button onclick="switchTab('others')" id="tab-btn-others" class="tab-trigger px-4 py-2.5 rounded-xl transition-all text-purple-700 snap-start"><span class="text-sm font-bold">MRSA他剤</span></button>
+                    <button onclick="switchTab('history')" id="tab-btn-history" class="tab-trigger px-4 py-2.5 rounded-xl transition-all snap-start"><span class="text-sm font-bold">履歴</span></button>
+                    <button onclick="switchTab('reference')" id="tab-btn-reference" class="tab-trigger px-4 py-2.5 rounded-xl transition-all snap-start"><span class="text-sm font-bold">根拠</span></button>
+                </div>
+            </div>
+
+            <!-- 比較・設計タブ -->
+            <div id="tab-overview" class="tab-content active space-y-4">
+                <div class="flex justify-between gap-2 mb-2 no-print">
+                    <button onclick="saveHistory('Initial Design')" class="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-sm font-bold border border-indigo-200 active:bg-indigo-100">
+                        <i data-lucide="save" class="w-4 h-4"></i> 結果を保存
+                    </button>
+                    <button onclick="window.print()" class="flex items-center justify-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-bold border border-slate-200 active:bg-slate-200">
+                        <i data-lucide="printer" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 gap-4">
+                    <!-- VCM -->
+                    <div class="bg-white border-l-8 border-l-blue-600 shadow-sm border border-slate-200 rounded-2xl p-4 print-break">
+                        <h3 class="text-base font-black text-blue-800 border-b border-blue-50 pb-2 mb-3 flex justify-between items-center">
+                            VCM 設計 <span class="text-[10px] bg-blue-100 text-blue-700 px-2 py-1 rounded">AUC目標: <span id="disp-target">500</span></span>
+                        </h3>
+                        <div class="space-y-3">
+                            <div class="grid grid-cols-2 gap-2 text-center">
+                                <div class="bg-slate-50 p-2 rounded-lg">
+                                    <div class="text-[10px] text-slate-400 font-bold uppercase">推定CL</div>
+                                    <div id="vcm-cl-est" class="text-lg font-black text-slate-700">--</div>
+                                </div>
+                                <div class="bg-blue-50 p-2 rounded-lg">
+                                    <div class="text-[10px] text-blue-400 font-bold uppercase">必要量</div>
+                                    <div id="vcm-req-dose" class="text-lg font-black text-blue-700">--</div>
+                                </div>
+                            </div>
+                            
+                            <div class="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-xs font-bold text-blue-600">推奨維持</span>
+                                    <span id="vcm-maint-detail" class="text-base font-black text-blue-900">--</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span class="text-[10px] font-bold text-slate-500">推奨負荷</span>
+                                    <span id="vcm-load-detail" class="text-xs font-bold text-slate-600">--</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-1.5">
+                                <p class="text-[10px] font-black text-slate-400 border-b border-slate-200 pb-1 mb-1">予測AUC (シミュレーション)</p>
+                                <div class="flex justify-between text-xs font-bold">
+                                    <span>Day 1 (0-24h)</span>
+                                    <span id="pred-auc-0-24" class="text-indigo-600">--</span>
+                                </div>
+                                <div class="flex justify-between text-xs font-bold">
+                                    <span>Day 2 (24-48h)</span>
+                                    <span id="pred-auc-24-48" class="text-indigo-600">--</span>
+                                </div>
+                                <div class="flex justify-between text-xs font-bold">
+                                    <span>定常状態 (SS)</span>
+                                    <span id="pred-auc-ss" class="text-indigo-600 text-sm">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TEIC -->
+                    <div class="bg-white border-l-8 border-l-cyan-600 shadow-sm border border-slate-200 rounded-2xl p-4 print-break">
+                        <h3 class="text-base font-black text-cyan-800 border-b border-cyan-50 pb-2 mb-3">TEIC 設計</h3>
+                        <div class="space-y-2">
+                            <div class="bg-cyan-50 p-3 rounded-xl">
+                                <div class="text-[10px] font-bold text-cyan-600 mb-0.5">負荷投与 (Day 1-2)</div>
+                                <div id="teic-load-detail" class="text-base font-black text-cyan-900">--</div>
+                            </div>
+                            <div class="bg-white border border-cyan-100 p-3 rounded-xl">
+                                <div class="text-[10px] font-bold text-slate-400 mb-0.5">維持投与 (Day 3~)</div>
+                                <div id="teic-maint-detail" class="text-base font-black text-slate-700">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DAP -->
+                    <div class="bg-white border-l-8 border-l-red-500 shadow-sm border border-slate-200 rounded-2xl p-4 print-break">
+                        <h3 class="text-base font-black text-red-700 border-b border-red-50 pb-2 mb-3 flex justify-between items-center">
+                            DAP 設計 <span id="dap-badge" class="text-[10px] px-2 py-1 rounded bg-slate-100">--</span>
+                        </h3>
+                        <div class="text-center py-2">
+                            <div class="text-xs font-bold text-slate-400 mb-1">推奨投与量 (1日1回)</div>
+                            <div id="dap-dose-detail" class="text-2xl font-black text-red-800">--</div>
+                            <div id="dap-note" class="text-[10px] text-red-500 font-bold mt-1"></div>
+                        </div>
+                    </div>
+
+                    <!-- LZD -->
+                    <div class="bg-white border-l-8 border-l-emerald-500 shadow-sm border border-slate-200 rounded-2xl p-4 print-break">
+                        <h3 class="text-base font-black text-emerald-700 border-b border-emerald-50 pb-2 mb-3">LZD 設計</h3>
+                        <div class="text-center py-2">
+                            <div class="text-xs font-bold text-slate-400 mb-1">推奨投与量 (1日2回)</div>
+                            <div class="text-2xl font-black text-emerald-800">600 mg</div>
+                            <div class="text-[10px] text-slate-400 font-bold mt-1">体重・腎機能調節不要</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VCM TDM Tab -->
+            <div id="tab-tdm-vcm" class="tab-content space-y-5">
+                <!-- 投与スケジュール (スマホ向けカード型UI) -->
+                <div class="bg-white border border-blue-200 rounded-2xl p-4 shadow-sm print-break">
+                    <h4 class="text-sm font-black text-blue-800 mb-3 flex items-center gap-2"><i data-lucide="syringe" class="w-4 h-4"></i> VCM 投与スケジュール</h4>
+                    <p class="text-[10px] text-slate-500 mb-3 font-bold">終了日時を入力して期間を確定させてください</p>
+                    <div id="vcm-regimen-body" class="space-y-3">
+                        <!-- JSでカード型の入力欄を生成 -->
+                    </div>
+                </div>
+
+                <!-- 実測値入力 (スマホ向けカード型UI) -->
+                <div class="bg-white border border-indigo-200 rounded-2xl p-4 shadow-sm print-break">
+                    <h4 class="text-sm font-black text-indigo-800 mb-3 flex items-center gap-2"><i data-lucide="test-tube" class="w-4 h-4"></i> VCM 実測値</h4>
+                    <div id="vcm-obs-body" class="space-y-3">
+                        <!-- JSでカード型の入力欄を生成 -->
+                    </div>
+                </div>
+
+                <!-- 【巨大解析ボタン】スマホ向け -->
+                <div class="sticky bottom-4 z-30 flex gap-2 no-print shadow-2xl rounded-2xl overflow-hidden">
+                    <button onclick="runVCMSimulation()" class="flex-1 py-4 bg-blue-600 text-white text-lg font-black active:bg-blue-700 transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="zap" class="w-5 h-5"></i> 解析実行
+                    </button>
+                    <button onclick="saveHistory('VCM TDM')" class="px-4 bg-slate-800 text-white flex items-center justify-center active:bg-slate-700 transition-colors">
+                        <i data-lucide="save" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <!-- 結果表示エリア (2x3グリッド) -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 grid grid-cols-2 gap-3 text-center print-break">
+                    <div class="bg-white p-2 rounded-lg border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">推定 CL</p>
+                        <p id="vcm-res-cl" class="text-sm font-black text-slate-700">--</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg border border-slate-100">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">推定 Vd</p>
+                        <p id="vcm-res-vd" class="text-sm font-black text-slate-700">--</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg border border-slate-100 col-span-2 flex justify-around">
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase">予測 Peak</p>
+                            <p id="vcm-res-peak" class="text-base font-black text-blue-600">--</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase">予測 Trough</p>
+                            <p id="vcm-res-trough" class="text-base font-black text-blue-600">--</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg border border-indigo-100">
+                        <p class="text-[10px] font-bold text-indigo-400 uppercase">予測 AUC(ss)</p>
+                        <p id="vcm-res-auc" class="text-xl font-black text-indigo-600">--</p>
+                    </div>
+                    <div class="bg-white p-2 rounded-lg border border-slate-100 flex flex-col justify-center">
+                        <p class="text-[10px] font-bold text-slate-400 uppercase">判定</p>
+                        <p id="vcm-res-judge" class="text-base font-black text-slate-600">--</p>
+                    </div>
+                </div>
+
+                <!-- 推奨投与設計 -->
+                <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded-2xl p-4 shadow-sm print-break" id="vcm-rec-container" style="display:none;">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-sm font-black text-yellow-800 flex items-center gap-1.5">
+                            <i data-lucide="lightbulb" class="w-4 h-4"></i> 推奨投与設計
+                        </h4>
+                        <span class="text-[10px] bg-yellow-200 text-yellow-800 px-2 py-1 rounded font-bold" id="fitting-status-badge">Pop.</span>
+                    </div>
+                    <div id="vcm-rec-list" class="flex flex-col gap-2"></div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 graph-section">
+                    <div class="w-full graph-container" style="height: 300px;">
+                        <canvas id="vcmGraph"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TEIC TDM Tab -->
+            <div id="tab-tdm-teic" class="tab-content space-y-5">
+                <!-- 投与スケジュール -->
+                <div class="bg-white border border-cyan-200 rounded-2xl p-4 shadow-sm print-break">
+                    <h4 class="text-sm font-black text-cyan-800 mb-3 flex items-center gap-2">TEIC 投与スケジュール</h4>
+                    <div id="teic-regimen-body" class="space-y-3">
+                        <!-- JS生成 -->
+                    </div>
+                </div>
+
+                <!-- 実測値 -->
+                <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm print-break">
+                    <h4 class="text-sm font-black text-slate-600 mb-3 flex items-center gap-2">TEIC 実測値</h4>
+                    <div id="teic-obs-body" class="space-y-3">
+                        <!-- JS生成 -->
+                    </div>
+                </div>
+
+                <!-- 解析ボタン -->
+                <div class="sticky bottom-4 z-30 flex gap-2 no-print shadow-2xl rounded-2xl overflow-hidden">
+                    <button onclick="runTEICSimulation()" class="flex-1 py-4 bg-cyan-600 text-white text-lg font-black active:bg-cyan-700 transition-colors flex items-center justify-center gap-2">
+                        <i data-lucide="zap" class="w-5 h-5"></i> TEIC解析
+                    </button>
+                    <button onclick="saveHistory('TEIC TDM')" class="px-4 bg-slate-800 text-white flex items-center justify-center active:bg-slate-700 transition-colors">
+                        <i data-lucide="save" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-3 graph-section">
+                    <div class="w-full graph-container" style="height: 300px;">
+                        <canvas id="teicGraph"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MRSA他剤タブ -->
+            <div id="tab-others" class="tab-content space-y-4">
+                <div class="bg-purple-50 border border-purple-200 p-3 rounded-xl flex items-start gap-2">
+                    <i data-lucide="alert-circle" class="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5"></i>
+                    <div class="text-xs text-purple-900 font-medium space-y-1">
+                        <p class="font-bold">使用上の注意</p>
+                        <ul class="list-disc list-inside space-y-0.5 ml-1">
+                            <li>感受性が確認できた場合のみ使用</li>
+                            <li>RFPは単剤使用不可（すぐ耐性化）</li>
+                            <li>VCM等主要薬が使えない場合に検討</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-4" id="others-container">
+                    <!-- JSで動的にカードを生成 -->
+                </div>
+                <div class="bg-white p-4 rounded-xl border border-slate-200 text-[10px] text-slate-500 space-y-1">
+                    <p class="font-bold text-slate-700">参考文献</p>
+                    <p>国内先発品添付文書および腎機能別投与量資料に基づく。</p>
+                </div>
+            </div>
+
+            <!-- 履歴タブ (カードリスト化) -->
+            <div id="tab-history" class="tab-content space-y-4">
+                <div class="flex justify-between items-center no-print">
+                    <h2 class="text-base font-black text-slate-800">解析履歴</h2>
+                    <button onclick="clearHistory()" class="px-3 py-1.5 text-red-500 text-xs font-bold border border-red-100 rounded-lg active:bg-red-50">履歴消去</button>
+                </div>
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col" id="history-table-body">
+                    <!-- JSでカードリストとして挿入 -->
+                </div>
+            </div>
+
+            <!-- 根拠タブ -->
+            <div id="tab-reference" class="tab-content">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-6">
+                    <section>
+                        <h3 class="text-sm font-black text-indigo-600 border-b border-indigo-50 pb-1.5 mb-2">腎機能モデル・VCM</h3>
+                        <p class="text-[11px] text-slate-600 leading-relaxed">
+                            <strong class="text-slate-800">・eGFR:</strong> 日本腎臓学会推算式<br>
+                            <strong class="text-slate-800">・CCr:</strong> Cockcroft-Gault式<br>
+                            <strong class="text-slate-800">・VCM解析:</strong> Sawchuk-Zaske法 / 1-Comp<br>
+                            <strong class="text-slate-800">・目標:</strong> AUC24 400〜600 (ガイドライン)<br>
+                            <strong class="text-red-600">・高度TDM:</strong> 実測値からCLとVdを自動最適化（ベイジアンライク）<br>
+                            <strong class="text-slate-800">・透析患者:</strong> CART(CCr=50)、HD(CCr=5)として計算
+                        </p>
+                    </section>
+                    <section>
+                        <h3 class="text-sm font-black text-cyan-600 border-b border-cyan-50 pb-1.5 mb-2">TEICモデル</h3>
+                        <p class="text-[11px] text-slate-600 leading-relaxed">簡易1-Comp蓄積モデル (半減期160h)</p>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 詳細表示モーダル -->
+    <div id="detail-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden p-4">
+        <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm modal-overlay" onclick="closeDetailModal()"></div>
+        <div class="bg-white w-full max-w-sm rounded-3xl shadow-2xl overflow-hidden relative z-10 modal-content border border-slate-100 flex flex-col max-h-[90vh]">
+            <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                <h3 class="text-base font-black text-slate-800 flex items-center gap-2">
+                    <i data-lucide="file-text" class="w-4 h-4 text-indigo-600"></i> 履歴詳細
+                </h3>
+                <button onclick="closeDetailModal()" class="text-slate-400 p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <div id="detail-content" class="p-4 overflow-y-auto flex-1 space-y-4">
+                <!-- JSでコンテンツ挿入 -->
+            </div>
+            <div class="p-3 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                <button onclick="closeDetailModal()" class="w-full py-3 bg-slate-800 text-white font-bold rounded-xl active:bg-slate-900 transition-colors">
+                    閉じる
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Global Vars ---
+        const inputs = ['weight', 'age', 'sex', 'creatinine', 'targetAuc', 'recordName', 'isSevere'];
+        const numRegimenRows = 4; // スマホ向けに少し減らす
+        const numObsRows = 3;     // スマホ向けに減らす
+        let vcmChart = null;
+        let teicChart = null;
+        let historyData = JSON.parse(localStorage.getItem('mrsa_history_v13_mobile') || '[]');
+
+        function init() {
+            lucide.createIcons();
+            
+            const today = new Date().toISOString().split('T')[0];
+            generateRows('vcm', today);
+            generateRows('teic', today);
+
+            // Default Inputs
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = tomorrow.toISOString().split('T')[0];
+            
+            document.getElementById('vcm-reg-end-d0').value = tomorrowStr;
+            document.getElementById('vcm-reg-dose0').value = 1000;
+            document.getElementById('vcm-reg-int0').value = 12;
+            
+            document.getElementById('teic-reg-end-d0').value = tomorrowStr;
+            document.getElementById('teic-reg-dose0').value = 400;
+            document.getElementById('teic-reg-int0').value = 12;
+
+            inputs.forEach(id => {
+                document.getElementById(id)?.addEventListener('input', () => {
+                    calcInitialDesign();
+                    updatePrintHeader();
+                    calcOtherDrugs();
+                });
+            });
+
+            calcInitialDesign();
+            updatePrintHeader();
+            calcOtherDrugs(); 
+            renderHistory();
+            
+            setTimeout(() => {
+                runVCMSimulation();
+                runTEICSimulation();
+            }, 500);
+        }
+
+        function toggleDialysis(type) {
+            if(type === 'cart' && document.getElementById('isCART').checked) {
+                document.getElementById('isHD').checked = false;
+            }
+            if(type === 'hd' && document.getElementById('isHD').checked) {
+                document.getElementById('isCART').checked = false;
+            }
+            calcInitialDesign();
+            updatePrintHeader();
+            calcOtherDrugs();
+        }
+
+        // スマホ向けカード型入力UIの生成
+        function generateRows(drug, today) {
+            let htmlReg = '';
+            for(let i=0; i<numRegimenRows; i++) {
+                htmlReg += `
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div class="text-[10px] font-black text-slate-400 mb-2">スケジュール #${i+1}</div>
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">開始</label>
+                            <div class="space-y-1"><input type="date" id="${drug}-reg-start-d${i}" class="tdm-date" value="${i===0 ? today : ''}"><input type="time" id="${drug}-reg-start-t${i}" class="tdm-date" value="10:00"></div>
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">終了</label>
+                            <div class="space-y-1"><input type="date" id="${drug}-reg-end-d${i}" class="tdm-date"><input type="time" id="${drug}-reg-end-t${i}" class="tdm-date" value="10:00"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">量 (mg)</label>
+                            <input type="number" id="${drug}-reg-dose${i}" class="tdm-input" placeholder="未入力">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1">間隔 (h)</label>
+                            <input type="number" id="${drug}-reg-int${i}" class="tdm-input" placeholder="未入力">
+                        </div>
+                    </div>
+                </div>`;
+            }
+            document.getElementById(`${drug}-regimen-body`).innerHTML = htmlReg;
+
+            let htmlObs = '';
+            for(let i=0; i<numObsRows; i++) {
+                let extra = '';
+                if(drug === 'vcm') {
+                    extra = `
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">濃度 (µg/mL)</label>
+                                <input type="number" id="${drug}-obs-conc${i}" class="tdm-input border-indigo-200 text-indigo-700 bg-indigo-50" placeholder="-">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">タイミング</label>
+                                <select id="${drug}-obs-timing${i}" class="tdm-input text-xs"><option value="trough">トラフ</option><option value="peak">ピーク</option><option value="random">随時</option></select>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    extra = `
+                        <div class="grid grid-cols-2 gap-2 mt-2">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">Trough</label>
+                                <input type="number" id="${drug}-obs-trough${i}" class="tdm-input border-cyan-200 text-cyan-700 bg-cyan-50" placeholder="-">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1">備考</label>
+                                <input type="text" class="tdm-input text-xs" placeholder="任意">
+                            </div>
+                        </div>
+                    `;
+                }
+                htmlObs += `
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <div class="text-[10px] font-black text-slate-400 mb-2">採血 #${i+1}</div>
+                    <div class="flex gap-2">
+                        <input type="date" id="${drug}-obs-d${i}" class="tdm-date flex-1">
+                        <input type="time" id="${drug}-obs-t${i}" class="tdm-date w-24" value="09:00">
+                    </div>
+                    ${extra}
+                </div>`;
+            }
+            document.getElementById(`${drug}-obs-body`).innerHTML = htmlObs;
+        }
+
+        function getParams() {
+            const w = parseFloat(document.getElementById('weight').value) || 60;
+            const a = parseFloat(document.getElementById('age').value) || 60;
+            const s = document.getElementById('sex').value;
+            const cre = parseFloat(document.getElementById('creatinine').value) || 1.0;
+            
+            let egfr = 194 * Math.pow(cre, -1.094) * Math.pow(a, -0.287) * (s==='female'?0.739:1);
+            let ccr = ((140 - a) * w) / (72 * cre) * (s==='female'?0.85:1);
+            
+            const isCART = document.getElementById('isCART').checked;
+            const isHD = document.getElementById('isHD').checked;
+            
+            if (isCART) ccr = 50;
+            if (isHD) ccr = 5;
+            
+            return { w, a, s, cre, egfr, ccr, isCART, isHD };
+        }
+
+        // --- Other Drugs Calculation ---
+        function calcOtherDrugs() {
+            const p = getParams();
+            const container = document.getElementById('others-container');
+            let html = '';
+
+            const createCard = (name, dosage, sub, colorClass = "border-l-slate-400") => {
+                return `
+                <div class="bg-white border-l-8 ${colorClass} shadow-sm border border-slate-200 rounded-2xl p-4">
+                    <h3 class="text-sm font-black text-slate-700 border-b border-slate-100 pb-1.5 mb-2">${name}</h3>
+                    <div class="space-y-1">
+                        <div class="text-base font-black text-slate-800 leading-tight">${dosage}</div>
+                        <div class="text-[10px] font-bold text-slate-400">${sub}</div>
+                    </div>
+                </div>`;
+            };
+
+            html += createCard("CLDM", "内服: 300mg q6-8h<br>注射: 600-900mg q8h", "※腎機能調節不要", "border-l-orange-400");
+            html += createCard("MINO", "100mg q12h", "初回100-200mg ※調節不要", "border-l-yellow-400");
+            html += createCard("DOXY", "内服: 100mg q12h", "初日200mg ※調節不要", "border-l-amber-500");
+
+            let lvfxDose = "", lvfxSub = "";
+            if (p.isHD) {
+                lvfxDose = "250mg 48時間毎";
+                lvfxSub = "CCr: 5.0 (HD) ※透析後投与";
+            } else {
+                lvfxSub = `CCr: ${p.ccr.toFixed(1)}` + (p.isCART ? " (CART)" : "");
+                if(p.ccr > 50) lvfxDose = "500mg 1日1回";
+                else if (p.ccr >= 30) lvfxDose = "初日500mg → 250mg q24h";
+                else lvfxDose = "初日500mg → 250mg q48h";
+            }
+            html += createCard("LVFX", lvfxDose, lvfxSub, "border-l-pink-500");
+
+            let stDose = "", stSub = "";
+            const stIvTotal = Math.round(p.w * 5); 
+            if (p.isHD) {
+                stDose = `注射: ${stIvTotal}mg(TMP) 1日1回`;
+                stSub = "CCr: 5.0 (HD) ※基本非推奨";
+            } else {
+                stSub = `CCr: ${p.ccr.toFixed(1)}` + (p.isCART ? " (CART)" : "");
+                if(p.ccr > 50) stDose = `内服: 2錠 q12h<br>注射: ${stIvTotal}mg q8h`;
+                else if (p.ccr >= 30) stDose = `内服: 2錠 q12h<br>注射: ${stIvTotal}mg q8h`;
+                else stDose = `内服: 1錠 q12h<br>注射: ${stIvTotal}mg q12h`;
+            }
+            html += createCard("ST合剤 (バクタ)", stDose, stSub + " ※注射はTMP量", "border-l-teal-500");
+            html += createCard("RFP", "300-600mg 1日1回", "<span class='text-red-500'>※単剤使用不可</span>", "border-l-rose-600");
+
+            container.innerHTML = html;
+        }
+
+        function calcInitialDesign() {
+            const p = getParams();
+            const targetAuc = parseFloat(document.getElementById('targetAuc').value) || 500;
+            const isSevere = document.getElementById('isSevere').checked;
+
+            document.getElementById('res-egfr').innerText = p.egfr.toFixed(1);
+            document.getElementById('res-ccr').innerText = p.ccr.toFixed(1);
+            document.getElementById('disp-target').innerText = targetAuc;
+
+            const cl_vcm = (0.69 * p.ccr * 60) / 1000; 
+            const vd_vcm = 0.7 * p.w;
+            const ke_vcm = cl_vcm / vd_vcm;
+            
+            document.getElementById('vcm-cl-est').innerText = cl_vcm.toFixed(2) + " L/h";
+            const reqDaily = targetAuc * cl_vcm;
+            document.getElementById('vcm-req-dose').innerText = Math.round(reqDaily) + " mg/d";
+
+            const load = Math.round((p.w * 25) / 250) * 250;
+            const interval = p.ccr < 50 ? 24 : 12;
+            let maint = Math.round((reqDaily / (24/interval)) / 250) * 250;
+            if(maint < 500) maint = 500;
+            
+            document.getElementById('vcm-load-detail').innerText = load + " mg";
+            document.getElementById('vcm-maint-detail').innerText = maint + " mg q" + interval + "h";
+
+            let conc = 0;
+            let auc_0_24 = 0, auc_24_48 = 0;
+            const step = 0.5;
+
+            for(let t=0; t<48; t+=step) {
+                let dose = 0;
+                if(t === 0) dose = load;
+                else if (t % interval === 0) dose = maint;
+
+                if(dose > 0) conc += dose / vd_vcm;
+                const currentArea = conc * step;
+                if(t < 24) auc_0_24 += currentArea;
+                else auc_24_48 += currentArea;
+                conc = conc * Math.exp(-ke_vcm * step);
+            }
+
+            const dailyMaint = maint * (24/interval);
+            const auc_ss = dailyMaint / cl_vcm;
+
+            document.getElementById('pred-auc-0-24').innerText = auc_0_24.toFixed(0);
+            document.getElementById('pred-auc-24-48').innerText = auc_24_48.toFixed(0);
+            document.getElementById('pred-auc-ss').innerText = auc_ss.toFixed(0);
+
+            // TEIC & DAP
+            const t_load = Math.round(p.w * 12 / 200) * 200;
+            document.getElementById('teic-load-detail').innerText = `${t_load}mg q12h (3回)`;
+            document.getElementById('teic-maint-detail').innerText = `${t_load}mg q24h`;
+
+            const dapKg = isSevere ? 9 : (p.ccr<30 ? 6 : 8);
+            const dapDose = Math.round(p.w * dapKg / 50) * 50;
+            document.getElementById('dap-dose-detail').innerText = dapDose + " mg";
+            document.getElementById('dap-badge').innerText = isSevere ? "重症" : "通常";
+            document.getElementById('dap-badge').className = isSevere ? "text-[10px] px-2 py-1 rounded bg-red-600 text-white" : "text-[10px] px-2 py-1 rounded bg-slate-100 text-slate-600";
+            document.getElementById('dap-note').innerText = p.ccr < 30 ? "※CCr<30 48h毎" : "";
+        }
+
+        // --- UPDATED: 2D FITTING LOGIC (V11.0) ---
+        function runVCMSimulation() {
+            try {
+                const p = getParams();
+                const pop_cl = (0.69 * p.ccr * 60) / 1000;
+                const pop_vd = 0.7 * p.w;
+                
+                const events = getTimeline('vcm');
+                if(events.length === 0) {
+                    alert("【エラー】投与スケジュールが未入力です。開始・終了日時、量、間隔を全て埋めてください。");
+                    return;
+                }
+
+                const obs = [];
+                for(let i=0; i<numObsRows; i++) {
+                    const d = document.getElementById(`vcm-obs-d${i}`).value;
+                    const t = document.getElementById(`vcm-obs-t${i}`).value;
+                    const c = parseFloat(document.getElementById(`vcm-obs-conc${i}`).value);
+                    if(d && t && !isNaN(c)) {
+                        obs.push({ time: new Date(`${d}T${t}`).getTime(), conc: c });
+                    }
+                }
+
+                let best_k_cl = 1.0, best_k_vd = 1.0, min_loss = Infinity;
+                
+                if(obs.length > 0) {
+                    events.sort((a,b) => a.start - b.start);
+                    const t_start = events[0].start.getTime();
+                    const sim_step = 3600*1000; 
+                    const w_cl = 100, w_vd = 400; 
+                    
+                    for(let k_cl = 0.2; k_cl <= 3.0; k_cl += 0.1) {
+                        for(let k_vd = 0.5; k_vd <= 1.5; k_vd += 0.05) {
+                            const trial_cl = pop_cl * k_cl;
+                            const trial_vd = pop_vd * k_vd;
+                            const trial_ke = trial_cl / trial_vd;
+                            
+                            let mse_obs = 0, sim_conc = 0, sim_t = t_start;
+                            let max_obs_t = Math.max(...obs.map(o => o.time));
+                            let end_fit_time = Math.max(events[events.length-1].end.getTime(), max_obs_t);
+                            
+                            while(sim_t <= end_fit_time) {
+                                events.forEach(ev => {
+                                    if(sim_t >= ev.start.getTime() && sim_t < ev.end.getTime()) {
+                                        const elapsed = sim_t - ev.start.getTime();
+                                        const intervalMs = ev.int * 3600 * 1000;
+                                        if(elapsed % intervalMs < sim_step) sim_conc += ev.dose / trial_vd;
+                                    }
+                                });
+                                
+                                obs.forEach(o => {
+                                    if(Math.abs(o.time - sim_t) < sim_step) mse_obs += Math.pow(sim_conc - o.conc, 2);
+                                });
+                                
+                                sim_conc = sim_conc * Math.exp(-trial_ke * 1.0); 
+                                sim_t += sim_step;
+                            }
+                            
+                            const penalty = w_cl * Math.pow(k_cl - 1.0, 2) + w_vd * Math.pow(k_vd - 1.0, 2);
+                            const total_loss = mse_obs + penalty;
+                            
+                            if(total_loss < min_loss) {
+                                min_loss = total_loss;
+                                best_k_cl = k_cl;
+                                best_k_vd = k_vd;
+                            }
+                        }
+                    }
+                }
+
+                const fitted_cl = pop_cl * best_k_cl;
+                const fitted_vd = pop_vd * best_k_vd;
+                const fitted_ke = fitted_cl / fitted_vd;
+                const isFitted = obs.length > 0;
+
+                document.getElementById('vcm-res-cl').innerHTML = isFitted 
+                    ? `<span class="text-indigo-600">${fitted_cl.toFixed(2)}</span>`
+                    : `${pop_cl.toFixed(2)}`;
+                
+                document.getElementById('vcm-res-vd').innerHTML = isFitted 
+                    ? `<span class="text-indigo-600">${fitted_vd.toFixed(1)}</span>`
+                    : `${pop_vd.toFixed(1)}`;
+                
+                document.getElementById('fitting-status-badge').innerText = isFitted ? "Fit" : "Pop";
+                document.getElementById('fitting-status-badge').className = isFitted 
+                    ? "text-[10px] bg-indigo-100 text-indigo-700 px-2 py-1 rounded font-bold" 
+                    : "text-[10px] bg-yellow-100 text-yellow-800 px-2 py-1 rounded font-bold";
+
+                // Final Sim
+                events.sort((a,b) => a.start - b.start);
+                const t_start = events[0].start.getTime();
+                const t_last_end = events[events.length-1].end.getTime();
+                const t_max = t_start + (14 * 24 * 3600 * 1000);
+                const t_end_sim = Math.min(t_last_end + 86400000, t_max);
+
+                const labels = [], data = [];
+                let conc = 0, t_curr = t_start;
+                const step = 0.5 * 3600 * 1000;
+                let hoursPassed = 0;
+
+                while(t_curr <= t_end_sim) {
+                    events.forEach(ev => {
+                        if(t_curr >= ev.start.getTime() && t_curr < ev.end.getTime()) {
+                            const timeFromStart = t_curr - ev.start.getTime();
+                            const intervalMs = ev.int * 3600 * 1000;
+                            if(intervalMs > 0 && timeFromStart % intervalMs < step) {
+                                 conc += ev.dose / fitted_vd;
+                            }
+                        }
+                    });
+                    labels.push(hoursPassed);
+                    data.push(conc);
+                    conc = conc * Math.exp(-fitted_ke * 0.5);
+                    t_curr += step;
+                    hoursPassed += 0.5;
+                }
+
+                // SS
+                const lastReg = events[events.length-1];
+                if(lastReg.int > 0) {
+                    const css_max = (lastReg.dose/fitted_vd) * (1 / (1 - Math.exp(-fitted_ke * lastReg.int)));
+                    const css_min = css_max * Math.exp(-fitted_ke * lastReg.int);
+                    const auc_ss_calc = (lastReg.dose / fitted_cl) * (24/lastReg.int);
+
+                    document.getElementById('vcm-res-peak').innerText = css_max.toFixed(1);
+                    document.getElementById('vcm-res-trough').innerText = css_min.toFixed(1);
+                    document.getElementById('vcm-res-auc').innerText = auc_ss_calc.toFixed(0);
+                    
+                    let judge = "適正", judgeColor = "text-emerald-600";
+                    if(auc_ss_calc < 400) { judge = "低値"; judgeColor = "text-blue-600"; }
+                    if(auc_ss_calc > 600) { judge = "高値"; judgeColor = "text-red-600"; }
+                    
+                    const judgeEl = document.getElementById('vcm-res-judge');
+                    judgeEl.innerText = judge;
+                    judgeEl.className = `text-sm font-black ${judgeColor}`;
+                }
+
+                drawChart('vcmGraph', labels, data, 'VCM', 'rgb(79, 70, 229)');
+
+                // Recommendation
+                const targets = [400, 500, 600];
+                const recListEl = document.getElementById('vcm-rec-list');
+                document.getElementById('vcm-rec-container').style.display = 'block';
+                recListEl.innerHTML = '';
+
+                targets.forEach(target => {
+                    const reqDaily = target * fitted_cl;
+                    const isOverLimit = reqDaily > 4000;
+                    const interval = p.ccr < 50 ? 24 : 12;
+                    let doseHtml = '', alertHtml = '', cardClass = 'bg-white border border-slate-200';
+                    
+                    if (isOverLimit) {
+                        const dose = Math.floor((4000 / (24/interval)) / 100) * 100;
+                        doseHtml = `<span class="text-base font-black text-red-600">${dose}mg</span> <span class="text-xs">q${interval}h (上限)</span>`;
+                        cardClass = 'bg-red-50 border border-red-100';
+                    } else {
+                        let dose = Math.round((reqDaily / (24/interval)) / 250) * 250;
+                        if(dose < 250) dose = 250;
+                        doseHtml = `<span class="text-base font-black text-indigo-700">${dose}mg</span> <span class="text-xs">q${interval}h</span>`;
+                    }
+
+                    recListEl.insertAdjacentHTML('beforeend', `
+                        <div class="${cardClass} p-2 rounded-lg flex justify-between items-center shadow-sm">
+                            <span class="text-[10px] font-bold text-slate-500 uppercase">AUC ${target}</span>
+                            <div>${doseHtml}</div>
+                        </div>
+                    `);
+                });
+                lucide.createIcons();
+            } catch (e) {
+                console.error(e);
+                alert("解析エラーです。入力値を確認してください。");
+            }
+        }
+
+        function runTEICSimulation() {
+             const p = getParams();
+             const vd = 1.0 * p.w;
+             const ke = 0.693 / 160;
+
+             const events = getTimeline('teic');
+             if(events.length === 0) {
+                 alert("【エラー】TEICスケジュールを入力してください。");
+                 return;
+             }
+
+             events.sort((a,b) => a.start - b.start);
+             const t_start = events[0].start.getTime();
+             const t_last_end = events[events.length-1].end.getTime();
+             const t_end_sim = t_last_end + 86400000;
+
+             const labels = [], data = [];
+             let conc = 0, t_curr = t_start, hoursPassed = 0;
+             const step = 0.5 * 3600 * 1000;
+
+             while(t_curr <= t_end_sim) {
+                events.forEach(ev => {
+                    if(t_curr >= ev.start.getTime() && t_curr < ev.end.getTime()) {
+                        const timeFromStart = t_curr - ev.start.getTime();
+                        const intervalMs = ev.int * 3600 * 1000;
+                        if(intervalMs > 0 && timeFromStart % intervalMs < step) conc += ev.dose / vd;
+                    }
+                });
+                labels.push(hoursPassed);
+                data.push(conc);
+                conc = conc * Math.exp(-ke * 0.5);
+                t_curr += step;
+                hoursPassed += 0.5;
+             }
+             drawChart('teicGraph', labels, data, 'TEIC', 'rgb(8, 145, 178)');
+        }
+
+        // --- Helpers ---
+        function getTimeline(drug) {
+            let events = [];
+            for(let i=0; i<numRegimenRows; i++) {
+                const sd = document.getElementById(`${drug}-reg-start-d${i}`).value;
+                const st = document.getElementById(`${drug}-reg-start-t${i}`).value;
+                const ed = document.getElementById(`${drug}-reg-end-d${i}`).value;
+                const et = document.getElementById(`${drug}-reg-end-t${i}`).value;
+                const dose = parseFloat(document.getElementById(`${drug}-reg-dose${i}`).value);
+                const int = parseFloat(document.getElementById(`${drug}-reg-int${i}`).value);
+                
+                if(sd && ed && dose && int) {
+                    events.push({
+                        start: new Date(`${sd}T${st}`),
+                        end: new Date(`${ed}T${et}`),
+                        dose: dose, int: int
+                    });
+                }
+            }
+            return events;
+        }
+
+        function drawChart(id, labels, data, label, color) {
+            if(id === 'vcmGraph' && vcmChart) vcmChart.destroy();
+            if(id === 'teicGraph' && teicChart) teicChart.destroy();
+            
+            const ctx = document.getElementById(id).getContext('2d');
+            const config = {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: label, data: data, borderColor: color, backgroundColor: color, borderWidth: 2, pointRadius: 0, tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            type: 'linear', title: { display: true, text: 'Time(hr)', font: { size: 10 } },
+                            ticks: { stepSize: 24, font: { size: 9 }, callback: v => 'D' + (Math.floor(v/24)+1) }
+                        },
+                        y: { beginAtZero: true, ticks: { font: { size: 10 } } }
+                    }
+                }
+            };
+            const chart = new Chart(ctx, config);
+            if(id === 'vcmGraph') vcmChart = chart;
+            if(id === 'teicGraph') teicChart = chart;
+        }
+
+        // --- History & Print ---
+        function updatePrintHeader() {
+            const el = (id) => document.getElementById(id).innerText;
+            const val = (id) => document.getElementById(id).value;
+            document.getElementById('p-id-name').innerText = val('recordName') || 'No ID';
+            document.getElementById('p-age-sex').innerText = val('age') + '歳 / ' + (val('sex')==='male'?'M':'F');
+            document.getElementById('p-weight').innerText = val('weight') + ' kg';
+            document.getElementById('p-renal').innerText = val('creatinine') + ' / ' + el('res-egfr');
+            document.getElementById('p-ccr').innerText = el('res-ccr');
+        }
+
+        function saveHistory(type) {
+            const now = new Date().toLocaleString();
+            const id = document.getElementById('recordName').value || '未入力';
+            const p = getParams();
+            let summary = "", details = {};
+
+            if(type === 'Initial Design') {
+                const auc = document.getElementById('pred-auc-ss').innerText;
+                summary = `初期設計 AUC: ${auc}`;
+                details = {
+                    patient: { ...p, cre: document.getElementById('creatinine').value }, type: '初期設計',
+                    data: {
+                        cl: document.getElementById('vcm-cl-est').innerText, req: document.getElementById('vcm-req-dose').innerText,
+                        load: document.getElementById('vcm-load-detail').innerText, maint: document.getElementById('vcm-maint-detail').innerText,
+                        auc_day1: document.getElementById('pred-auc-0-24').innerText, auc_ss: document.getElementById('pred-auc-ss').innerText
+                    }
+                };
+            } else if (type === 'VCM TDM') {
+                const auc = document.getElementById('vcm-res-auc').innerText;
+                summary = `VCM解析 AUC: ${auc}`;
+                details = {
+                    patient: { ...p, cre: document.getElementById('creatinine').value }, type: 'VCM TDM',
+                    data: {
+                        cl: document.getElementById('vcm-res-cl').innerText, vd: document.getElementById('vcm-res-vd').innerText,
+                        peak: document.getElementById('vcm-res-peak').innerText, trough: document.getElementById('vcm-res-trough').innerText,
+                        auc: auc, judge: document.getElementById('vcm-res-judge').innerText
+                    },
+                    rec_html: document.getElementById('vcm-rec-list').innerHTML
+                };
+            } else {
+                summary = "TEIC TDM解析";
+                details = { patient: { ...p, cre: document.getElementById('creatinine').value }, type: 'TEIC TDM', note: "シミュレーション済" };
+            }
+
+            historyData.unshift({ date: now, id: id, type: type, summary: summary, details: details });
+            localStorage.setItem('mrsa_history_v13_mobile', JSON.stringify(historyData));
+            renderHistory();
+            alert('保存しました');
+        }
+
+        // 履歴をカードリスト型に変更
+        function renderHistory() {
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = historyData.map((h, i) => `
+                <div class="bg-white p-3 border-b border-slate-100 last:border-0 flex flex-col gap-2 relative">
+                    <div class="flex justify-between items-start pr-16">
+                        <div>
+                            <div class="text-[10px] text-slate-400">${h.date}</div>
+                            <div class="font-bold text-sm text-slate-800">${h.id}</div>
+                            <div class="text-xs text-indigo-600 font-bold mt-0.5">${h.summary}</div>
+                        </div>
+                    </div>
+                    <span class="absolute top-3 right-3 bg-slate-100 text-slate-600 px-2 py-1 rounded text-[10px] font-bold">${h.type}</span>
+                    <button onclick="showHistoryDetail(${i})" class="mt-1 w-full bg-slate-50 border border-slate-200 hover:bg-slate-100 active:bg-slate-200 text-slate-600 py-1.5 rounded-lg text-xs font-bold transition-colors">詳細を見る</button>
+                </div>
+            `).join('') || '<div class="p-4 text-center text-xs text-slate-400">履歴はありません</div>';
+        }
+
+        function showHistoryDetail(index) {
+            const h = historyData[index], d = h.details, p = d.patient;
+            let content = `
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs mb-4">
+                    <div class="grid grid-cols-2 gap-2 mb-2">
+                        <div><span class="text-slate-400 block text-[10px]">ID/名前</span><b>${h.id}</b></div>
+                        <div><span class="text-slate-400 block text-[10px]">年齢/性別</span><b>${p.a}歳 ${p.s==='male'?'M':'F'}</b></div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <div><span class="text-slate-400 block text-[10px]">体重</span><b>${p.w}kg</b></div>
+                        <div><span class="text-slate-400 block text-[10px]">Cre</span><b>${p.cre}</b></div>
+                        <div><span class="text-slate-400 block text-[10px]">CCr</span><b>${p.ccr.toFixed(1)}</b></div>
+                    </div>
+                </div>`;
+
+            if(d.type === '初期設計') {
+                content += `
+                    <div class="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                        <div class="grid grid-cols-2 gap-2 text-xs mb-2">
+                            <div>推定CL: <b>${d.data.cl}</b></div>
+                            <div>必要量: <b>${d.data.req}</b></div>
+                        </div>
+                        <div class="space-y-1 text-xs bg-white p-2 rounded-lg border border-blue-100">
+                            <div class="flex justify-between"><span>負荷:</span> <b>${d.data.load}</b></div>
+                            <div class="flex justify-between"><span>維持:</span> <b>${d.data.maint}</b></div>
+                            <div class="flex justify-between border-t border-slate-100 pt-1 mt-1 text-indigo-700"><span>AUC(SS):</span> <b>${d.data.auc_ss}</b></div>
+                        </div>
+                    </div>`;
+            } else if (d.type === 'VCM TDM') {
+                content += `
+                    <div class="bg-indigo-50 p-3 rounded-xl border border-indigo-100">
+                        <div class="grid grid-cols-2 gap-2 text-xs mb-3">
+                            <div>CL: <b>${d.data.cl}</b></div>
+                            <div>Vd: <b>${d.data.vd}</b></div>
+                            <div>Peak: <b>${d.data.peak}</b></div>
+                            <div>Trough: <b>${d.data.trough}</b></div>
+                        </div>
+                        <div class="bg-white p-3 rounded-lg border border-indigo-100 text-center mb-3">
+                            <p class="text-[10px] text-slate-400">AUC (SS)</p>
+                            <p class="text-2xl font-black text-indigo-600">${d.data.auc} <span class="text-xs text-slate-500">(${d.data.judge})</span></p>
+                        </div>
+                        <div class="text-xs font-bold text-slate-600 mb-1">推奨</div>
+                        <div class="space-y-1">${d.rec_html}</div>
+                    </div>`;
+            } else {
+                content += `<div class="p-3 text-center text-slate-500 text-xs">${d.note}</div>`;
+            }
+            
+            document.getElementById('detail-content').innerHTML = content;
+            document.getElementById('detail-modal').classList.remove('hidden');
+        }
+
+        function closeDetailModal() {
+            document.getElementById('detail-modal').classList.add('hidden');
+        }
+
+        function clearHistory() {
+            if(confirm('全履歴を消去しますか？')) {
+                historyData = [];
+                localStorage.removeItem('mrsa_history_v13_mobile');
+                renderHistory();
+            }
+        }
+
+        function switchTab(id) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-trigger').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + id).classList.add('active');
+            
+            const btn = document.getElementById('tab-btn-' + id);
+            btn.classList.add('active');
+            
+            // タブを中央付近にスクロール
+            btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
